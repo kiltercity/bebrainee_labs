@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 
 
 _root = os.path.dirname(os.path.realpath(__file__))
-_page_cache_path = f"{ _root }/cached_pages/"
+_page_cache_path = f"{ _root }/.cached_pages/"
 _parse_page_link = 'https://www.lookup.pk/dynamic/search.aspx'
 _default_params = dict(
     searchtype="kl",
