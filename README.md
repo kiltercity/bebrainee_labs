@@ -4,6 +4,8 @@
 * backgend (python)
 * frontend (Vanilla, HTML, CSS, etc..)
 
+### \* Click on the header to open specific section README 
+
 ---
 
 ## [C Language Tasks](c_labs/README.md)
@@ -33,9 +35,17 @@ Contains:
 * 10 tasks totally
 
 Topics covered:
-* Basic DSA:
-    * Lists
+* External Modules:
+    * Data Parsing
+    * CSV/XLSX Reports
     * Queues
-    * Stacks
-    * Dictionaries and Sets
-    * Graphs (and recursion)
+    * Image processing
+* Simple Social Network
+    * Databse structure and Migrations
+    * Creating posts; user profile and its friends
+    * Administrator interface
+* Optimization
+    * Quey scheduler and Indexes
+    * Caching and Full-Text search
+    * Event-Driven architecture
+
