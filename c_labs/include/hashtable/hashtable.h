@@ -2,8 +2,7 @@
 #define __HASHLIST_1__H__
 // ===========================================================================
 
-    #include <stdarg.h>
-    
+
     // Alias for unsigned char
     typedef unsigned char uchar_t; // cause of ASS CI
     typedef int bool_t; // int takes 4 bytes, char takes 1 
@@ -42,6 +41,7 @@
         uint_t end;
         Node * lastnode_ptr;
 
+        void (*check_counters)(struct hiter*);
         HashTable ** ht;
         bool_t (*next)(struct htiter*, Node ** );
     } HashIter;
@@ -55,6 +55,6 @@
 
     uint_t keyhash(HashTable*, char *);
 
-
+    
 // ===========================================================================
 #endif // __HASHLIST_1__H__

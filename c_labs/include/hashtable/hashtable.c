@@ -9,7 +9,6 @@
 
 #include "hashtable.h"
 
-
 uint_t HASHD_PRIME = 1309401007;
 
 
@@ -311,7 +310,20 @@ bool_t hiternext(HashIter * hi, Node** item)
     return 1;
 }
 
+void _check_counters__(HashIter* hi)
+{
+    int startFrom = hi->start;
+    int stopAt = hi->end;
+    HashTable * ht = *hi->ht;
 
+    // position guards
+    if ( ! stopAt || stopAt >= ht->size || stopAt < 0 ) {
+        hi->end = ht->size;
+    }
+    if ( startFrom < 0 || startFrom >= stopAt ) {
+        hi->start = 0;
+    }
+}
 
 /* = FUNCTION =: newHashIter
  * -------------------------------------------------------------------------
@@ -335,19 +347,16 @@ bool_t hiternext(HashIter * hi, Node** item)
 HashIter * newHashIter(HashTable ** ht, ...)
 {
     va_list args;
-    va_start (args, *ht);
+    va_start (args, ht);
 
 
     // Parse additional arguments
-    uint_t startFrom = va_arg(args, uint_t);
-    uint_t stopAt    = va_arg(args, uint_t);
+    uint_t startFrom = va_arg(args, int);
+    uint_t stopAt    = va_arg(args, int);
 
-    // position guards
-    if ( stopAt >= (*ht)->size || stopAt < 0 ) { stopAt = (*ht)->size; }
-    if ( startFrom < 0 || startFrom >= stopAt ) { startFrom = 0; }
-    
     // create on heap to avoid destruction on exit
     HashIter * hi = malloc ( sizeof ( HashIter ));
+    hi->check_counters = _check_counters__;
     hi->start = startFrom;
     hi->end   = stopAt;
     hi->pos = 0;
@@ -357,5 +366,6 @@ HashIter * newHashIter(HashTable ** ht, ...)
 
     va_end(args);
 
+    hi->check_counters(hi);
     return hi;
 }
