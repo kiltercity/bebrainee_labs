@@ -1,2 +1,3 @@
-.cached_pages
+.cached_pages/
+parse_results/
 parsed_page_*.json

@@ -1,105 +1,180 @@
+#!/usr/bin/env python3
+import asyncio
 import argparse
-import json
-import os
+import queue
+import hashlib
 
-import httpx
-from bs4 import BeautifulSoup
-
-
-
-_root = os.path.dirname(os.path.realpath(__file__))
-_page_cache_path = f"{ _root }/.cached_pages/"
-_parse_page_link = 'https://www.lookup.pk/dynamic/search.aspx'
-_default_params = dict(
-    searchtype="kl",
-    k="gym",
-    l="lahore",
-    page=1
-)
+import fetchlib
+import parselib
+import cachelib as caching
 
 
 
-def read_json() -> dict:
-    """Just handle file-reading routine and JSON parsing
-    """
-    try:
-        with open('./parsed_data.json', ) as f_:
-            return json.loads(f_.read())
-    except OSError:
-        print("Can't read file")
-        return
+
+_default_search_query = "gym"
+
 
 
 def get_cli_arguments() -> argparse.Namespace:
-    """Read specified command line arguments and return parsed args
+    """Read specified command line arguments and return parsed args.
+    ...
+
+    Returns:
+    --------
+        parsed arguments Namespace created by argparse:
+            - .max_pages_count
+                is maximum pages specified when script is invoked
+                or by default is 20
+            - .continue_parsing
+                whether to continue parsing from the page
+                where script ended last time
+                by default: False
+            - .search_query
+                specific search query to ask remote website for
     """
     ap = argparse.ArgumentParser(description='Parse search page lookup.pk')
     ap.add_argument('-m', '--max-pages-count', type=int, default=20)
-    ap.add_argument('-r', '--continue-parsing', type=bool, default=False)
-
+    ap.add_argument('-r', '--continue-parsing', action='store_true')
+    ap.add_argument('-s',
+                    '--search-query',
+                    type=str,
+                    default=_default_search_query)
     return ap.parse_args()
 
 
-def get_page_cache(page_num: int) -> bytes:
-    page_filepath = f"{ _page_cache_path }page_{ page_num }"
-    try:
-        with open(page_filepath) as f_:
-            return f_.read()
-    except OSError as e:
-        print('Info: cached page not found: ', e)
+async def parse_worker(tqueue):
+    """Manages parsing flow.
+    This is basically an async task.
+    Fetches contents. Parses results and stores them.
+    ...
 
-def cache_page_contents(contents: bytes, page_num: int):
-    page_filepath = f"{ _page_cache_path }page_{ page_num }"
-    try:
-        with open(page_filepath, 'wb') as f_:
-            f_.write(contents)
-    except OSError as e:
-        print('Failed to save page contents to the cache: ', e)
-
-
-def get_page_contents(page_num: int = 1):
-    """Retrieve web page contents and cache it
-
-    Makes http GET request for page and stores its content into a cache
-    or reads contents from cache and just returns
+    Parameters:
+    -----------
+        - tqueue: object
+            this is an async queue object, which holds:
+                * currently handled page number
+                * search query hash (to identify different parsing results)
+                * event tuple: previous task event and current task event
+                    this is needed 
+                    to manage some consistency and orering among tasks
+    Returns:
+    --------
+        - Page number or None
     """
+    print("+" * 80)
 
-    _default_params['page'] = page_num
-    cached_contents = get_page_cache(page_num)
+    # Unpacking data from queue
+    #
+    # the queue preserves the order of page parsing
+    page_num, squery, finish_events = tqueue.get()
+    query_str, query_hash = squery
+    prev_task_ev, curr_task_ev = finish_events
     
-    if cached_contents:
-        return cached_contents
-    contents = httpx.get(_parse_page_link, params=_default_params).content
-    if contents:
-        cache_page_contents(contents, page_num)
-    return contents
 
+    # If some file exists under the currently parsed data path
+    # then we consider this task was already done
+    # 
+    if caching.check_stored_result(page_num, query_hash):
+        print(f"Nothing to do here. Already parsed: Page: {page_num}")
+        curr_task_ev.set()
+        return
 
-def make_preemptive_env_checks():
-    """Prepare needed environment.
+    print(f"Working on: Page { page_num }")
 
-    This is not to be confused with shell Environment.
-    This function takes some preparation steps to make sure
-    the script has all it needs to work
+    # If we cannot retrieve HTML page contents to parse from - quit
+    #
+    contents = await fetchlib.get_page_contents(page_num, query_str, query_hash)
+    if not contents:
+        print("No contents for this page: ", page_num)
+        curr_task_ev.set()
+        return
+
+    # Cook soup (parse html contents and write them to a file)
+    #
+    parse_results = parselib.bs4_parse_page(contents)
+    if parse_results:
+        caching.store_parse_results(parse_results, page_num, query_hash)
+
+    # Wait until previous task is finished
+    if prev_task_ev:
+        await prev_task_ev.wait()
+    print("Finishing : page ", page_num)
+
+    # store last page number to cache
+    # see now? this respects the needed order
+    # and still doesn't prevent asynchronous above
+    #
+    await caching.cache_pagenum(page_num, query_hash)
+    curr_task_ev.set()
+    return page_num
+
+    
+async def cook_soup(max_pages: int,
+                    start_from_savepoint: bool,
+                    search_query_str: str):
+    """Manage all the steps needed to read, parse and store the data.
+    ...
+
+    Arguments:
+    ----------
+        - max_pages: int
+            allowed maximum pages to parse at a time
+        - start_from_savepoint: bool
+            continue from where the script finished last time
+            (from the last parsed page number)
+    
+    Returns:
+    --------
+        None
     """
-    if not os.path.exists(_page_cache_path):
-        os.makedirs(_page_cache_path)
+    # search_query_id
+    search_query_hash = hashlib.md5(search_query_str.encode()).hexdigest()
 
+    start_from = 0
+    pages_range = range(1, max_pages + 1)
+    tasks = []
+    tqueue = queue.Queue(max_pages)
 
-def start_parsing(max_pages: int, start_from_savepoint: bool):
-    data = None
-
-    make_preemptive_env_checks()
-
+    # Restart where we ended last time
     if start_from_savepoint:
-        data = read_json()
-    
-    raw_page = get_page_contents()
+        start_from = caching.get_stored_last_pagenum(search_query_hash)
 
-    cook_soup()
-    
+    # Push page numbers to queue
+    # * Also pass search query hash,
+    #   so the results saved for particular search query
+    # * Pass Event synchronization primitive
+    #   to achieve consistent caching of last page number
+    #
+    evts = (None, asyncio.Event())
+    prev_task_ev = None
+    squery = (search_query_str, search_query_hash)
+    for offset in pages_range:
+        tqueue.put((start_from + offset, squery, evts))
 
+        evts = (prev_task_ev, asyncio.Event())
+        _, prev_task_ev = evts
+    
+    # start parsing tasks concurrently (passing the queue to preserve order)
+    for c in pages_range:
+        # we need to create a strong referrence to the task object
+        # as the << create_task >> method creates only WEAK reference
+        #
+        task = asyncio.create_task(parse_worker(tqueue))
+        tasks.append(task)
+
+    # Wait until all the task are completed
+    #
+    await asyncio.gather(*tasks)
+    last_pagenum = await caching.get_cached_pagenum(search_query_hash)
+    caching.store_last_pagenum(last_pagenum, search_query_hash)
+    
+    
+    
 
 if __name__ == '__main__':
     args = get_cli_arguments()
-    start_parsing(args.max_pages_count, args.continue_parsing)
+    asyncio.run(cook_soup(
+        args.max_pages_count,
+        args.continue_parsing,
+        args.search_query,
+    ))
