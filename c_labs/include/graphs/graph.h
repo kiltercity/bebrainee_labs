@@ -57,7 +57,7 @@
     typedef struct __RCaG__
     {
         char * name;
-        RCG_Vertice * (*vertices);
+        RCG_Vertice * root;
         int vertices_count;
         
         void (*__build_random_tree)(struct __RCaG__ *);
@@ -71,13 +71,17 @@
     {
         int __sentinel: 1;
         RCGraph ** graph_ptr;
-        int vertices_count;
+        int ;
 
         int create_random_vertices: 1;
 
         char * name;
     };
     RCG_Create_Status_T initRCGraph( struct __newgraph_params__ * args  );
+
+
+    /* So we can pass named (keyword) arguments to the function
+     * =============================================*/
     # define initRCGraph(...) _initRCGraph( &(struct __newgraph_params__ ) \
         { .__sentinel=0, __VA_ARGS__ })
     

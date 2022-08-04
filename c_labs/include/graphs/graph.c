@@ -21,25 +21,25 @@ RCG_Create_Status_T _initRCGraph ( struct __newgraph_params__ * args );
 /* --------------------------------------------------------------------------
  *   DEFINITIONS
  * --------------------------------------------------------------------------*/
-static __get_random_unique_category ( )
-static __build_random_graph_tree (RCGraph * p_graph)
-{
-    int roots_count = p_graph->roots_count;
-    int c = 0;
+// static __get_random_unique_category ( )
+// static int __build_random_graph_tree (RCGraph * p_graph)
+// {
+//     int roots_count = p_graph->roots_count;
+//     int c = 0;
 
-    while ( c < roots_count )
-    {
-        __build_graph_tree_segment ( p_graph, rand_vertice_count )
-    }
-    int coutnrer = 0;
-    int vertice_rand_rel_count;
+//     while ( c < roots_count )
+//     {
+//         __build_graph_tree_segment ( p_graph, rand_vertice_count )
+//     }
+//     int coutnrer = 0;
+//     int vertice_rand_rel_count;
 
-    int * sarray = malloc ( sizeof (desired_count) );
-    while ( counter < desired_count )
-    {
+//     int * sarray = malloc ( sizeof (desired_count) );
+//     while ( counter < desired_count )
+//     {
         
-    }
-}
+//     }
+// }
 
 
 RCG_Create_Status_T _initRCGraph( struct __newgraph_params__ * args )
@@ -47,9 +47,12 @@ RCG_Create_Status_T _initRCGraph( struct __newgraph_params__ * args )
     char * gname = args->name;
     int vcount = args->vertices_count;
 
+    // Set default name if not provided
     if ( ! gname )
-        gname = "DefaultGraphName";
+        gname = "RCG - Relevant Category (Page) Graph";
 
+    // If negative number of vertices provided
+    // this comment is just for dumbs or very smart people like Einstein
     if (vcount <= 0)
         vcount = 1;
 
@@ -58,10 +61,12 @@ RCG_Create_Status_T _initRCGraph( struct __newgraph_params__ * args )
         .vertices_count = vcount
     };
     
-    gp->vertices = malloc ( sizeof(RCG_Vertice)  );
-    int c = -1;
-    --vcount;
     char vname[512];
+    int c = -1;
+
+    gp->root = malloc ( sizeof(RCG_Vertice)  );
+    --vcount;
+    
     while (c++ < vcount)
     {
         sprintf(vname, "v%d", c);

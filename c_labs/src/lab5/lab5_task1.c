@@ -6,12 +6,13 @@ int main (void)
 {
     RCGraph * gc;
     initRCGraph( .graph_ptr = &gc,
-                //  .name = "Categories",
+                //  .name = "RandomUserCategories",
                  .vertices_count = 3
     );
 
 
-    printf("%s %d", gc->name, gc->vertices_count);
+    printf("Graph: %s \nGraph vertices count: %d\n", 
+            gc->name, gc->vertices_count);
 
     return 0;
 }
